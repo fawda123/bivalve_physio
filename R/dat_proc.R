@@ -10,7 +10,7 @@ deplev <- c('Baseline', '5', '30')
 deplab <- c('Baseline', '5m', '30m')
 
 # import all as nested list
-wkbk <- here("data/raw/", "Copy of project data for Nina.xlsx") 
+wkbk <- here::here("data/raw/", "Copy of project data for Nina.xlsx") 
 dat <- wkbk %>% 
   excel_sheets %>% 
   enframe %>% 
@@ -135,18 +135,20 @@ physbs30 <- phys %>%
     `Depth (m)` = factor(`Depth (m)`, levels = deplev, labels = deplab)
   )
 
-phys <- phys %>% 
+biodat <- phys %>% 
   filter(!`Depth (m)` %in% 'Baseline') %>% 
   bind_rows(physbs5, physbs30)
 
 # # a simple plot
-# phys %>% 
+# biodat %>% 
 #   filter(Species == 'scallop') %>% 
 #   filter(grepl('^fat', var)) %>% 
 #   na.omit() %>% 
 #   ggplot(aes(x = season, y = val)) + 
 #   geom_boxplot() + 
 #   facet_grid(`Depth (m)` ~ var, scales = 'free')
+
+save(biodat, file = 'data/biodat.RData', compress = 'xz')
 
 # environmental data ------------------------------------------------------
 
@@ -192,26 +194,16 @@ phy <- dat %>%
   ) %>% 
   gather('var', 'val', -`Depth (m)`, -season, -date)
 
-env <- bind_rows(crb, phy)
+envdat <- bind_rows(crb, phy)
 
 # # a simple plot
-# env %>%
+# envdat %>%
 #   ggplot(aes(x = date, y = val, group = `Depth (m)`, colour = `Depth (m)`)) +
 #   geom_line() +
 #   geom_point() + 
 #   facet_grid(var ~ ., scales = 'free')
 
-
-# combine physio and env --------------------------------------------------
-
-env <- env %>% 
-  mutate(typ = 'environmental')
-phys <- phys %>% 
-  mutate(typ = 'physiological')
-
-bivdat <- bind_rows(env, phys)
-
-save(bivdat, file = 'data/bivdat.RData', compress = 'xz')
+save(envdat, file = 'data/envdat.RData', compress = 'xz')
 
 # bivalve extrapolation ---------------------------------------------------
 
@@ -222,14 +214,12 @@ save(bivdat, file = 'data/bivdat.RData', compress = 'xz')
 # this might be a stretch, but perhaps okay if we use spearman which is rank based and assumes only monotonic
 
 # environmental sampling dates to extrapolate
-envdts <- bivdat %>% 
-  filter(typ == 'environmental') %>% 
+envdts <- envdat %>% 
   pull(date) %>% 
   unique 
 
 # first take average of physio samples at each depth/sample date
-physagg <- bivdat %>% 
-  filter(typ == 'physiological') %>% 
+physagg <- biodat %>% 
   group_by(`Depth (m)`, date, var, Species) %>% 
   summarise(val = mean(val)) %>% 
   na.omit # some fatty acids not shared betwen spp
@@ -256,4 +246,16 @@ physprd <- physagg %>%
 
 # get correlations --------------------------------------------------------
 
+# setup search grid
+corgrd <- physprd %>% 
+  pull(var) %>% 
+  unique %>%
+  c(., unique(envdat$var)) %>% 
+  combn(2) %>%
+  t %>% 
+  data.frame(stringsAsFactors = F) %>%
+  crossing(c('5m', '30m'), c('mussel', 'scallop'), .) %>% 
+  t %>% 
+  data.frame(stringsAsFactors = F) %>% 
+  as.list
 
