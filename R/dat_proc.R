@@ -92,7 +92,7 @@ fatmus <- fat %>%
   filter(Species %in% 'mussel') %>% 
   gather('var', 'val', -Species, -`Depth (m)`, -Season)
 
-# separate oysters
+# separate scallops
 fatsca <- fat %>% 
   filter(!Species %in% 'mussel')
 names(fatsca) <- c(names(fatsca)[1:3], fatsca[1, -c(1:3)]) %>% unlist
@@ -110,6 +110,7 @@ fat <- bind_rows(fatsca, fatmus) %>%
     `Depth (m)` = factor(`Depth (m)`, levels = deplev, labels = deplab)
     )
 
+# join all physio data
 phys <- bind_rows(gro, edg, mid, lip, fat) %>% 
   mutate(
     date = case_when(
@@ -119,11 +120,66 @@ phys <- bind_rows(gro, edg, mid, lip, fat) %>%
     )
   )
 
+# # a simple plot
+# phys %>% 
+#   filter(Species == 'scallop') %>% 
+#   filter(grepl('^fat', var)) %>% 
+#   na.omit() %>% 
+#   ggplot(aes(x = season, y = val)) + 
+#   geom_boxplot() + 
+#   facet_grid(`Depth (m)` ~ var, scales = 'free')
 
-phys %>% 
-  filter(Species == 'scallop') %>% 
-  filter(grepl('^fat', var)) %>% 
-  na.omit() %>% 
-  ggplot(aes(x = season, y = val)) + 
-  geom_boxplot() + 
-  facet_grid(`Depth (m)` ~ var, scales = 'free')
+# environmental data ------------------------------------------------------
+
+##
+# carbon chemistry
+crb <- dat %>% 
+  filter(value %in% 'carbon chemistry-bottle samples') %>% 
+  pull(data) %>% 
+  .[[1]] %>% 
+  rename(
+    season = Season,
+    date = Date,
+    dic = `DIC (µmol/kg)`,
+    ta = `TA (µmol/kg)`, 
+    ph = `pH Total In-situ`, 
+    pco2 = `pCO2 (uatm)`, 
+    calcite = `calcite saturation state`, 
+    aragonite = `aragonite saturation state`, 
+    revelle = `Revelle factor`
+  ) %>% 
+  mutate(
+    date = as.Date(date), 
+    `Depth (m)` = factor(`Depth (m)`, levels = deplev, labels = deplab)
+  ) %>% 
+  gather('var', 'val', -`Depth (m)`, -season, -date)
+
+##
+# physical
+phy <- dat %>% 
+  filter(value %in% 'temp,DO,salinity') %>% 
+  pull(data) %>% 
+  .[[1]] %>% 
+  rename(
+    season = Season,
+    date = Date,
+    sal = Salinity, 
+    temp = temperature,
+    do = DO
+  ) %>% 
+  mutate(
+    date = as.Date(date), 
+    `Depth (m)` = factor(`Depth (m)`, levels = deplev, labels = deplab)
+  ) %>% 
+  gather('var', 'val', -`Depth (m)`, -season, -date)
+
+env <- bind_rows(crb, phy)
+
+# # a simple plot
+# env %>%
+#   ggplot(aes(x = date, y = val, group = `Depth (m)`, colour = `Depth (m)`)) +
+#   geom_line() +
+#   geom_point() + 
+#   facet_grid(var ~ ., scales = 'free')
+
+
