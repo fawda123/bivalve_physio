@@ -114,11 +114,30 @@ fat <- bind_rows(fatsca, fatmus) %>%
 phys <- bind_rows(gro, edg, mid, lip, fat) %>% 
   mutate(
     date = case_when(
-      season == 'Baseline' ~ mdy('12/21/2017'),
+      season == 'Baseline' ~ mdy('12/21/2016'),
       season == 'winter' ~ mdy('3/22/2017'),
       season == 'spring' ~ mdy('6/15/2017'),
     )
   )
+
+# need to duplicate depth baseline, same beginning measurements apply to both 
+physbs5 <- phys %>% 
+  filter(`Depth (m)` %in% 'Baseline') %>% 
+  mutate(
+    `Depth (m)` = '5',
+    `Depth (m)` = factor(`Depth (m)`, levels = deplev, labels = deplab)
+    )
+
+physbs30 <- phys %>% 
+  filter(`Depth (m)` %in% 'Baseline') %>% 
+  mutate(
+    `Depth (m)` = '30',
+    `Depth (m)` = factor(`Depth (m)`, levels = deplev, labels = deplab)
+  )
+
+phys <- phys %>% 
+  filter(!`Depth (m)` %in% 'Baseline') %>% 
+  bind_rows(physbs5, physbs30)
 
 # # a simple plot
 # phys %>% 
@@ -181,5 +200,60 @@ env <- bind_rows(crb, phy)
 #   geom_line() +
 #   geom_point() + 
 #   facet_grid(var ~ ., scales = 'free')
+
+
+# combine physio and env --------------------------------------------------
+
+env <- env %>% 
+  mutate(typ = 'environmental')
+phys <- phys %>% 
+  mutate(typ = 'physiological')
+
+bivdat <- bind_rows(env, phys)
+
+save(bivdat, file = 'data/bivdat.RData', compress = 'xz')
+
+# bivalve extrapolation ---------------------------------------------------
+
+# bivalve data are for three time periods: baseline (duplicated for each depth), winter, and spring (three dates)
+# there are also only two locations (deep/shallow)
+# so we can only compare n = 3 or n = 2 for each enviromental/physiological combination (some parameters don't have baseline)
+# however, we might interpolate physiological data between baseline/winter/spring observations at dates where we have env data
+# this might be a stretch, but perhaps okay if we use spearman which is rank based and assumes only monotonic
+
+# environmental sampling dates to extrapolate
+envdts <- bivdat %>% 
+  filter(typ == 'environmental') %>% 
+  pull(date) %>% 
+  unique 
+
+# first take average of physio samples at each depth/sample date
+physagg <- bivdat %>% 
+  filter(typ == 'physiological') %>% 
+  group_by(`Depth (m)`, date, var, Species) %>% 
+  summarise(val = mean(val)) %>% 
+  na.omit # some fatty acids not shared betwen spp
+
+# nest, fit individual mods, interpolate
+physprd <- physagg %>% 
+  group_by(`Depth (m)`, var, Species) %>% 
+  nest %>% 
+  mutate(
+    data = purrr::map(data, function(x){
+      
+      # fit lm, predict with env dates, return predictions
+      md <- lm(val ~ date, x)
+      prd <- predict(md, newdata = data.frame(date = envdts))
+      out <- tibble(
+        date = envdts, val = prd
+      )
+      
+      return(out)
+      
+    })
+  ) %>% 
+  unnest
+
+# get correlations --------------------------------------------------------
 
 
