@@ -4,6 +4,7 @@ library(tidyverse)
 library(readxl)
 library(here)
 library(lubridate)
+library(imputeTS)
 
 # depth levels labels
 deplev <- c('Baseline', '5', '30')
@@ -213,6 +214,9 @@ save(envdat, file = 'data/envdat.RData', compress = 'xz')
 # however, we might interpolate physiological data between baseline/winter/spring observations at dates where we have env data
 # this might be a stretch, but perhaps okay if we use spearman which is rank based and assumes only monotonic
 
+data(biodat)
+data(envdat)
+
 # environmental sampling dates to extrapolate
 envdts <- envdat %>% 
   pull(date) %>% 
@@ -242,7 +246,8 @@ physprd <- physagg %>%
       
     })
   ) %>% 
-  unnest
+  unnest %>% 
+  ungroup
 
 # get correlations --------------------------------------------------------
 
@@ -254,8 +259,50 @@ corgrd <- physprd %>%
   combn(2) %>%
   t %>% 
   data.frame(stringsAsFactors = F) %>%
-  crossing(c('5m', '30m'), c('mussel', 'scallop'), .) %>% 
+  crossing(c('5m', '30m'), .) %>% 
   t %>% 
   data.frame(stringsAsFactors = F) %>% 
   as.list
 
+##
+# get mussel cors first
+
+# get only mussels
+physprdmuss <- physprd %>% 
+  filter(Species %in% 'mussel') %>% 
+  dplyr::select(-Species)
+
+# combine physio and env
+tocormuss <- bind_rows(physprdmuss, envdat) %>% 
+  dplyr::select(-season)
+
+# get corelations 
+ests <- purrr::map(corgrd, function(x){
+  
+  # select data to cor, fill missing dates with na interp
+  tocor <- tocormuss %>% 
+    filter(`Depth (m)` %in% x[1]) %>% 
+    filter(var %in% x[2:3]) %>% 
+    mutate(`Depth (m)` = as.character(`Depth (m)`)) %>%
+    complete(`Depth (m)`, var, date) %>%
+    group_by(var) %>%
+    mutate(val = na_interpolation(val)) %>%
+    spread(var, val) 
+  
+  # cor
+  cortst <- try({suppressWarnings(cor.test(tocor[[x[2]]], tocor[[x[3]]], method = 'spearman'))})
+  
+  if(inherits(cortst, 'try-error'))
+    return(NA)
+  
+  est <- cortst$estimate
+  pvl <- cortst$p.value
+  
+  # output
+  out <- c(est, pvl)
+  names(out) <- c('est', 'pvl')
+  
+  return(out)
+
+})
+  
