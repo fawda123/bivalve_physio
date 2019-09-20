@@ -301,17 +301,17 @@ estsmuss <- corgrd %>%
       if(inherits(cortst, 'try-error'))
         return(NA)
       
-      est <- cortst$estimate
+      cor <- cortst$estimate
       sig <- p_ast(cortst$p.value)
       
       # output
-      out <- data.frame(est = est, sig = sig)
+      out <- data.frame(cor = cor, sig = sig)
       
       return(out)
   
     }), 
     value = purrr::map(value, function(x) tibble(`Depth (m)` = x[1], var1 = x[2], var2 = x[3])), 
-    Biodat = 'mussel'
+    Species = 'mussel'
   ) %>% 
   unnest %>% 
   select(-name)
@@ -350,25 +350,25 @@ estsscal <- corgrd %>%
       if(inherits(cortst, 'try-error'))
         return(NA)
       
-      est <- cortst$estimate
+      cor <- cortst$estimate
       sig <- p_ast(cortst$p.value)
       
       # output
-      out <- data.frame(est = est, sig = sig)
+      out <- data.frame(cor = cor, sig = sig)
       
       return(out)
       
     }), 
     value = purrr::map(value, function(x) tibble(`Depth (m)` = x[1], var1 = x[2], var2 = x[3])), 
-    Biodat = 'scallop'
+    Species = 'scallop'
   ) %>% 
   unnest %>% 
   select(-name)
 
 ##
 # combine and save
-levs <- c('aragonite', 'calcite', 'dic', 'pco2', 'ph', 'revelle', 'sal', 'ta', 'tmp', 'gro', 'lip', 'edg', 'mid')
-labs <- c('Omega[ar]', 'Calcite', 'DIC', 'pco[2]', 'pH', 'revelle', 'salinity', 'Alkalinity', 'Temp', 'Growth', 'Lipids', 'Thickness[edge]', 'Thickness[mid]')
+levs <- c('aragonite', 'calcite', 'dic', 'do', 'pco2', 'ph', 'revelle', 'sal', 'ta', 'temp', 'gro', 'lip', 'edg', 'mid')
+labs <- c('Omega[ar]', 'Calcite', 'DIC', 'DO', 'pCO[2]', 'pH', 'revelle', 'salinity', 'Alkalinity', 'Temp', 'Growth', 'Lipids', 'Thickness[edge]', 'Thickness[mid]')
 
 crsdat <- bind_rows(estsmuss, estsscal) %>% 
   mutate(
