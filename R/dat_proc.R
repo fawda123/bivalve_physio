@@ -6,6 +6,8 @@ library(here)
 library(lubridate)
 library(imputeTS)
 
+source('R/funcs.R')
+
 # depth levels labels
 deplev <- c('Baseline', '5', '30')
 deplab <- c('Baseline', '5m', '30m')
@@ -251,9 +253,10 @@ physprd <- physagg %>%
 
 # get correlations --------------------------------------------------------
 
-# setup search grid
+# setup search grid, remove fats for now
 corgrd <- physprd %>% 
   pull(var) %>% 
+  grep('^fat', ., invert = T, value = T) %>% 
   unique %>%
   c(., unique(envdat$var)) %>% 
   combn(2) %>%
@@ -265,44 +268,113 @@ corgrd <- physprd %>%
   as.list
 
 ##
-# get mussel cors first
+# get mussel cors
 
 # get only mussels
-physprdmuss <- physprd %>% 
+physprdsub <- physprd %>% 
   filter(Species %in% 'mussel') %>% 
   dplyr::select(-Species)
 
 # combine physio and env
-tocormuss <- bind_rows(physprdmuss, envdat) %>% 
+tocor <- bind_rows(physprdsub, envdat) %>% 
   dplyr::select(-season)
 
 # get corelations 
-ests <- purrr::map(corgrd, function(x){
+estsmuss <- corgrd %>% 
+  enframe %>% 
+  mutate(
+    corest = purrr::map(value, function(x){
+    
+      # select data to cor, fill missing dates with na interp
+      tocorsub <- tocor %>% 
+        filter(`Depth (m)` %in% x[1]) %>% 
+        filter(var %in% x[2:3]) %>% 
+        mutate(`Depth (m)` = as.character(`Depth (m)`)) %>%
+        complete(`Depth (m)`, var, date) %>%
+        group_by(var) %>%
+        mutate(val = na_interpolation(val)) %>%
+        spread(var, val) 
+      
+      # cor
+      cortst <- try({suppressWarnings(cor.test(tocorsub[[x[2]]], tocorsub[[x[3]]], method = 'spearman'))})
+      
+      if(inherits(cortst, 'try-error'))
+        return(NA)
+      
+      est <- cortst$estimate
+      sig <- p_ast(cortst$p.value)
+      
+      # output
+      out <- data.frame(est = est, sig = sig)
+      
+      return(out)
   
-  # select data to cor, fill missing dates with na interp
-  tocor <- tocormuss %>% 
-    filter(`Depth (m)` %in% x[1]) %>% 
-    filter(var %in% x[2:3]) %>% 
-    mutate(`Depth (m)` = as.character(`Depth (m)`)) %>%
-    complete(`Depth (m)`, var, date) %>%
-    group_by(var) %>%
-    mutate(val = na_interpolation(val)) %>%
-    spread(var, val) 
-  
-  # cor
-  cortst <- try({suppressWarnings(cor.test(tocor[[x[2]]], tocor[[x[3]]], method = 'spearman'))})
-  
-  if(inherits(cortst, 'try-error'))
-    return(NA)
-  
-  est <- cortst$estimate
-  pvl <- cortst$p.value
-  
-  # output
-  out <- c(est, pvl)
-  names(out) <- c('est', 'pvl')
-  
-  return(out)
+    }), 
+    value = purrr::map(value, function(x) tibble(`Depth (m)` = x[1], var1 = x[2], var2 = x[3])), 
+    Biodat = 'mussel'
+  ) %>% 
+  unnest %>% 
+  select(-name)
 
-})
-  
+##
+# get scallop cors
+
+# get only scallop
+physprdsub <- physprd %>% 
+  filter(Species %in% 'scallop') %>% 
+  dplyr::select(-Species)
+
+# combine physio and env
+tocor <- bind_rows(physprdsub, envdat) %>% 
+  dplyr::select(-season)
+
+# get corelations 
+estsscal <- corgrd %>% 
+  enframe %>% 
+  mutate(
+    corest = purrr::map(value, function(x){
+      
+      # select data to cor, fill missing dates with na interp
+      tocorsub <- tocor %>% 
+        filter(`Depth (m)` %in% x[1]) %>% 
+        filter(var %in% x[2:3]) %>% 
+        mutate(`Depth (m)` = as.character(`Depth (m)`)) %>%
+        complete(`Depth (m)`, var, date) %>%
+        group_by(var) %>%
+        mutate(val = na_interpolation(val)) %>%
+        spread(var, val) 
+      
+      # cor
+      cortst <- try({suppressWarnings(cor.test(tocorsub[[x[2]]], tocorsub[[x[3]]], method = 'spearman'))})
+      
+      if(inherits(cortst, 'try-error'))
+        return(NA)
+      
+      est <- cortst$estimate
+      sig <- p_ast(cortst$p.value)
+      
+      # output
+      out <- data.frame(est = est, sig = sig)
+      
+      return(out)
+      
+    }), 
+    value = purrr::map(value, function(x) tibble(`Depth (m)` = x[1], var1 = x[2], var2 = x[3])), 
+    Biodat = 'scallop'
+  ) %>% 
+  unnest %>% 
+  select(-name)
+
+##
+# combine and save
+levs <- c('aragonite', 'calcite', 'dic', 'pco2', 'ph', 'revelle', 'sal', 'ta', 'tmp', 'gro', 'lip', 'edg', 'mid')
+labs <- c('Omega[ar]', 'Calcite', 'DIC', 'pco[2]', 'pH', 'revelle', 'salinity', 'Alkalinity', 'Temp', 'Growth', 'Lipids', 'Thickness[edge]', 'Thickness[mid]')
+
+crsdat <- bind_rows(estsmuss, estsscal) %>% 
+  mutate(
+    var1 = factor(var1, levels = rev(levs), labels = rev(labs)), 
+    var2 = factor(var2, levels = rev(levs), labels = rev(labs)), 
+    sig = gsub('ns', '', sig)
+  )
+
+save(crsdat, file = 'data/crsdat.RData', compress = 'xz')
