@@ -254,18 +254,13 @@ physprd <- physagg %>%
 # get correlations --------------------------------------------------------
 
 # setup search grid, remove fats for now
-corgrd <- physprd %>% 
+vrs <- physprd %>% 
   pull(var) %>% 
   grep('^fat', ., invert = T, value = T) %>% 
   unique %>%
-  c(., unique(envdat$var)) %>% 
-  combn(2) %>%
-  t %>% 
-  data.frame(stringsAsFactors = F) %>%
-  crossing(c('5m', '30m'), .) %>% 
-  t %>% 
-  data.frame(stringsAsFactors = F) %>% 
-  as.list
+  c(., unique(envdat$var))
+corgrd <- crossing(var1 = c('5m', '30m'), var2 = vrs, var3 = vrs) %>% 
+  filter(var2 != var3)
 
 ##
 # get mussel cors
@@ -281,14 +276,13 @@ tocor <- bind_rows(physprdsub, envdat) %>%
 
 # get corelations 
 estsmuss <- corgrd %>% 
-  enframe %>% 
   mutate(
-    corest = purrr::map(value, function(x){
+    corest = purrr::pmap(list(var1, var2, var3), function(var1, var2, var3){
     
       # select data to cor, fill missing dates with na interp
       tocorsub <- tocor %>% 
-        filter(`Depth (m)` %in% x[1]) %>% 
-        filter(var %in% x[2:3]) %>% 
+        filter(`Depth (m)` %in% var1) %>% 
+        filter(var %in% c(var2, var3)) %>% 
         mutate(`Depth (m)` = as.character(`Depth (m)`)) %>%
         complete(`Depth (m)`, var, date) %>%
         group_by(var) %>%
@@ -296,7 +290,7 @@ estsmuss <- corgrd %>%
         spread(var, val) 
       
       # cor
-      cortst <- try({suppressWarnings(cor.test(tocorsub[[x[2]]], tocorsub[[x[3]]], method = 'spearman'))})
+      cortst <- try({suppressWarnings(cor.test(tocorsub[[var2]], tocorsub[[var3]], method = 'pearson'))})
       
       if(inherits(cortst, 'try-error'))
         return(NA)
@@ -310,11 +304,9 @@ estsmuss <- corgrd %>%
       return(out)
   
     }), 
-    value = purrr::map(value, function(x) tibble(`Depth (m)` = x[1], var1 = x[2], var2 = x[3])), 
     Species = 'mussel'
   ) %>% 
-  unnest %>% 
-  select(-name)
+  unnest
 
 ##
 # get scallop cors
@@ -330,14 +322,13 @@ tocor <- bind_rows(physprdsub, envdat) %>%
 
 # get corelations 
 estsscal <- corgrd %>% 
-  enframe %>% 
   mutate(
-    corest = purrr::map(value, function(x){
+    corest = purrr::pmap(list(var1, var2, var3), function(var1, var2, var3){
       
       # select data to cor, fill missing dates with na interp
       tocorsub <- tocor %>% 
-        filter(`Depth (m)` %in% x[1]) %>% 
-        filter(var %in% x[2:3]) %>% 
+        filter(`Depth (m)` %in% var1) %>% 
+        filter(var %in% c(var2, var3)) %>% 
         mutate(`Depth (m)` = as.character(`Depth (m)`)) %>%
         complete(`Depth (m)`, var, date) %>%
         group_by(var) %>%
@@ -345,7 +336,7 @@ estsscal <- corgrd %>%
         spread(var, val) 
       
       # cor
-      cortst <- try({suppressWarnings(cor.test(tocorsub[[x[2]]], tocorsub[[x[3]]], method = 'spearman'))})
+      cortst <- try({suppressWarnings(cor.test(tocorsub[[var2]], tocorsub[[var3]], method = 'pearson'))})
       
       if(inherits(cortst, 'try-error'))
         return(NA)
@@ -359,22 +350,25 @@ estsscal <- corgrd %>%
       return(out)
       
     }), 
-    value = purrr::map(value, function(x) tibble(`Depth (m)` = x[1], var1 = x[2], var2 = x[3])), 
     Species = 'scallop'
   ) %>% 
-  unnest %>% 
-  select(-name)
+  unnest
 
 ##
 # combine and save
 levs <- c('aragonite', 'calcite', 'dic', 'do', 'pco2', 'ph', 'revelle', 'sal', 'ta', 'temp', 'gro', 'lip', 'edg', 'mid')
-labs <- c('Omega[ar]', 'Calcite', 'DIC', 'DO', 'pCO[2]', 'pH', 'revelle', 'salinity', 'Alkalinity', 'Temp', 'Growth', 'Lipids', 'Thickness[edge]', 'Thickness[mid]')
+labs <- c('Omega[ar]', 'Calcite', 'DIC', 'DO', 'pCO[2]', 'pH', 'Revelle', 'Salinity', 'Alkalinity', 'Temp', 'Growth', 'Lipids', 'Thickness[edge]', 'Thickness[mid]')
 
 crsdat <- bind_rows(estsmuss, estsscal) %>% 
   mutate(
-    var1 = factor(var1, levels = rev(levs), labels = rev(labs)), 
     var2 = factor(var2, levels = rev(levs), labels = rev(labs)), 
+    var3 = factor(var3, levels = rev(levs), labels = rev(labs)), 
     sig = gsub('ns', '', sig)
+  ) %>% 
+  rename(
+    `Depth (m)` = var1, 
+    var1 = var2, 
+    var2 = var3
   )
 
 save(crsdat, file = 'data/crsdat.RData', compress = 'xz')
