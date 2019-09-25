@@ -436,6 +436,33 @@ summary {
 </div>
 
 
+<pre class="r"><code>knitr::opts_chunk$set(echo = TRUE, warning = F, message = F, dev = &#39;png&#39;, fig.path = &#39;figs/&#39;, dev.args = list(family = &#39;serif&#39;))
+
+library(tidyverse)
+library(patchwork)
+library(ggrepel)
+library(scales)
+
+pbase &lt;- theme_bw(base_size = 12, base_family = &#39;serif&#39;) + 
+  theme(
+    panel.grid.major = element_blank(), 
+    panel.grid.minor = element_blank(), 
+    axis.text.x = element_text(angle = 45, hjust = 1, vjust = 1, size = 8), 
+    axis.text.y = element_text(size = 8),
+    legend.position = c(0.5, 1.1),
+    # legend.title = element_blank(),
+    legend.direction = &#39;horizontal&#39;,
+    plot.margin = unit(c(4,4,0,0), &quot;lines&quot;),
+    strip.background = element_blank(), 
+    strip.text.y = element_text(angle = 0, hjust = 0, vjust = 0.5), 
+    panel.background = element_rect(fill = &#39;black&#39;)
+  ) 
+
+lnloc &lt;- 4.5
+
+load(file = &#39;data/crsdat.RData&#39;)
+load(file = &#39;data/biodat.RData&#39;)
+load(file = &#39;data/envdat.RData&#39;)</code></pre>
 <div id="figures-and-tables" class="section level1 tabset">
 <h1><span class="header-section-number">1</span> Figures and tables</h1>
 <div id="time-series" class="section level2">

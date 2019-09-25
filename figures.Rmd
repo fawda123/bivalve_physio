@@ -4,7 +4,7 @@ output:
     code_folding: hide
 ---
 
-```{r message = F, warning = F, results = 'hide', echo=F}
+```{r message = F, warning = F, results = 'hide', echo=T}
 knitr::opts_chunk$set(echo = TRUE, warning = F, message = F, dev = 'png', fig.path = 'figs/', dev.args = list(family = 'serif'))
 
 library(tidyverse)
