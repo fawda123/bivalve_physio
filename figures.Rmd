@@ -30,10 +30,74 @@ pbase <- theme_bw(base_size = 12, base_family = 'serif') +
 lnloc <- 4.5
 
 load(file = 'data/crsdat.RData')
+load(file = 'data/biodat.RData')
+load(file = 'data/envdat.RData')
 
 ```
 
 # Figures and tables {.tabset}
+
+## Time series
+
+```{r obsplo, fig.height = 7, fig.width = 7}
+penv <- ggplot(envdat, aes(x = date, y = val, group = `Depth (m)`, color = `Depth (m)`)) + 
+  geom_line() + 
+  geom_point() + 
+  theme_bw() + 
+  facet_wrap(~var, ncol = 1, strip.position = 'left', scales = 'free_y') + 
+  theme(
+    strip.background = element_blank(), 
+    strip.placement = 'outside', 
+    axis.title = element_blank(), 
+    legend.position = 'right'
+  )
+
+pbio <- biodat %>%
+  filter(!grepl('^fat', var)) %>% 
+  group_by(`Depth (m)`, var, date, Species) %>% 
+  summarise(
+    ave = mean(val, na.rm = T),
+    min = quantile(val, na.rm = T, probs = 0.05),
+    max = quantile(val, na.rm = T, probs = 0.95)
+  ) %>% 
+  ungroup
+
+pmu <- pbio %>% 
+  filter(Species %in% 'mussel')
+
+p1 <- ggplot(pmu, aes(x = date, group = `Depth (m)`, color = `Depth (m)`)) + 
+  geom_point(aes(y = ave), position = position_dodge(width = 10)) + 
+  geom_errorbar(aes(ymin = min, ymax = max), width = 0, position = position_dodge(width = 10)) + 
+  theme_bw() + 
+  facet_wrap(~var, ncol = 1, strip.position = 'left', scales = 'free_y') + 
+  theme(
+    strip.background = element_blank(), 
+    strip.placement = 'outside', 
+    axis.title = element_blank(), 
+    legend.position = 'non'
+  ) + 
+  ggtitle('Mussel')
+
+
+psc <- pbio %>% 
+  filter(Species %in% 'scallop')
+
+p2 <- ggplot(psc, aes(x = date, group = `Depth (m)`, color = `Depth (m)`)) + 
+  geom_point(aes(y = ave), position = position_dodge(width = 10)) + 
+  geom_errorbar(aes(ymin = min, ymax = max), width = 0, position = position_dodge(width = 10)) + 
+  theme_bw() + 
+  facet_wrap(~var, ncol = 1, strip.position = 'left', scales = 'free_y') + 
+  theme(
+    strip.background = element_blank(), 
+    strip.placement = 'outside', 
+    axis.title = element_blank(), 
+    legend.position = 'none'
+  ) + 
+  ggtitle('Scallop')
+
+penv - (p1 + p2 + plot_layout(ncol = 1)) + plot_layout(ncol = 2)
+         
+```
 
 ## Correlation matrix
 
